@@ -1,0 +1,86 @@
+{"namespace": "com.github.andrasbeni.rq.proto",
+  "protocol": "Raft",
+
+  "types": [
+    {"type": "record", "name": "AddOrRemove", "fields": [
+      {"name" :"op", "type": { "type": "enum",
+        "name": "Operation",
+        "symbols" : ["Add", "Remove"]
+      }}, {"name" :"value", "type": "bytes"}
+    ]},
+
+    {"type": "record", "name": "LeaderAddress", "fields": [
+      {"name" :"host", "type": "string"},
+      {"name" :"port", "type": "int"}
+    ]},
+
+    {"type": "record", "name": "LogEntry", "fields": [
+      {"name" :"index", "type": "long"},
+      {"name" :"term", "type": "long"},
+      {"name" :"data", "type": "AddOrRemove"}
+    ]},
+
+    {"type": "record", "name": "VoteAndTerm", "fields": [
+      {"name" :"vote", "type": "int"},
+      {"name" :"term", "type": "long"}
+    ]},
+
+    { "name" : "AppendEntriesReq", "type": "record", "fields" : [
+      {"name": "term",   "type": "long"},
+      {"name": "leaderId",   "type": "int"},
+      {"name": "prevLogIndex",   "type": "long"},
+      {"name": "prevLogTerm",   "type": "long"},
+      {"name": "entries",   "type": {"type": "array", "items": "LogEntry"}},
+      {"name": "leaderCommit",   "type": "long"}
+    ]},
+    { "name" : "AppendEntriesResp", "type": "record", "fields" : [
+      {"name": "term",   "type": "long"},
+      {"name": "success",   "type": "boolean"}
+    ]},
+
+    { "name" : "VoteReq", "type": "record", "fields" : [
+      {"name": "term",   "type": "long"},
+      {"name": "candidateId",   "type": "int"},
+      {"name": "lastLogIndex",   "type": "long"},
+      {"name": "lastLogTerm",   "type": "long"}
+    ]},
+    { "name" : "VoteResp", "type": "record", "fields" : [
+      {"name": "term",   "type": "long"},
+      {"name": "voteGranted",   "type": "boolean"}
+    ]},
+    {"type": "record", "name": "AddOrRemoveResp", "fields": [
+      {"name": "leader",   "type": "LeaderAddress"},
+      {"name": "success",   "type": "boolean"}
+    ]}
+
+  ],
+
+  "messages": {
+    "appendEntries": {
+      "request": [{"name": "req", "type": "AppendEntriesReq"}],
+      "response": "AppendEntriesResp"
+    },
+    "requestVote": {
+      "request": [{"name": "req", "type": "VoteReq"}],
+      "response": "VoteResp"
+    },
+
+
+    "add": {
+      "request": [{"name": "value", "type": "bytes"}],
+      "response": "AddOrRemoveResp"
+    },
+    "next": {
+      "request": [],
+      "response": {"type": "record", "name": "NextResp", "fields": [
+        {"name": "leader",   "type": "LeaderAddress"},
+        {"name": "success",   "type": "boolean"},
+        {"name": "value",   "type": "bytes"}
+      ]}
+    },
+    "remove": {
+      "request": [],
+      "response": "AddOrRemoveResp"
+    }
+  }
+}
