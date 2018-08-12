@@ -1,19 +1,19 @@
-package com.github.andrasbeni.rq
+package com.github.andrasbeni.sr82
 
 
 import java.util.Properties
 
-import com.github.andrasbeni.rq.proto.{AppendEntriesReq, AppendEntriesResp}
+import com.github.andrasbeni.sr82.raft._
 
 import scala.collection.JavaConverters._
 
 object Follower extends RoleFactory {
-  override def apply(config : Properties, stateMachine: StateMachine, persistence: Persistence, cluster: Cluster, executor: Executor, roleListener : Role => Unit): Role = {
+  override def apply(config : Properties, stateMachine: StateMachine[_, _], persistence: Persistence, cluster: Cluster, executor: Executor, roleListener : Role => Unit): Role = {
     new Follower(config, stateMachine, persistence, cluster, executor, roleListener)
   }
 }
 
-class Follower(config : Properties, stateMachine : StateMachine, persistence : Persistence, cluster : Cluster, executor : Executor, roleListener : Role => Unit)
+class Follower(config : Properties, stateMachine : StateMachine[_, _], persistence : Persistence, cluster : Cluster, executor : Executor, roleListener : Role => Unit)
   extends Role(config, stateMachine, persistence, cluster, executor, roleListener) {
 
   override def startRole(): Unit = {
@@ -21,7 +21,7 @@ class Follower(config : Properties, stateMachine : StateMachine, persistence : P
     startTimer()
   }
 
-  override def appendEntries(req: AppendEntriesReq): AppendEntriesResp = {
+  override def appendEntries(req: AppendEntriesRequest): AppendEntriesResponse = {
     cancelTimer()
     var valid = req.getTerm >= persistence.term
     if (valid) {
@@ -31,10 +31,10 @@ class Follower(config : Properties, stateMachine : StateMachine, persistence : P
       valid = valid & doAppendEntries(req)
     }
     startTimer()
-    new AppendEntriesResp(persistence.term, valid)
+    new AppendEntriesResponse(persistence.term, valid)
   }
 
-  def doAppendEntries(req: AppendEntriesReq) : Boolean = {
+  def doAppendEntries(req: AppendEntriesRequest) : Boolean = {
     val log = persistence.log
     val prevEntry = log.read(req.getPrevLogIndex)
     val containsLeadersPrevEntry = prevEntry.exists(_.getTerm == req.getPrevLogTerm)

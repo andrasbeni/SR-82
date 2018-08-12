@@ -1,10 +1,10 @@
-package com.github.andrasbeni.rq
+package com.github.andrasbeni.sr82
 
 import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.concurrent.{CompletableFuture, Executors}
 
-import com.github.andrasbeni.rq.proto.{Raft, _}
+import com.github.andrasbeni.sr82.raft._
 import org.apache.avro.ipc.Callback
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -15,12 +15,12 @@ import org.mockito.invocation.InvocationOnMock
 
 class RPCTest {
 
-  val appendEntriesReqSuccess = new AppendEntriesReq(17L, 23, 29L, 31L, Collections.emptyList[LogEntry](), 37L)
-  val appendEntriesReqFailure = new AppendEntriesReq(19L, 23, 29L, 31L, Collections.emptyList[LogEntry](), 37L)
-  val appenEntriesResp = new AppendEntriesResp(17L, true)
-  val voteReqSuccess = new VoteReq(17L, 23, 29L, 31L)
-  val voteReqFailure = new VoteReq(19L, 23, 29L, 31L)
-  val voteResp = new VoteResp(17L, true)
+  val appendEntriesReqSuccess = new AppendEntriesRequest(17L, 23, 29L, 31L, Collections.emptyList[LogEntry](), 37L)
+  val appendEntriesReqFailure = new AppendEntriesRequest(19L, 23, 29L, 31L, Collections.emptyList[LogEntry](), 37L)
+  val appenEntriesResp = new AppendEntriesResponse(17L, true)
+  val voteReqSuccess = new VoteRequest(17L, 23, 29L, 31L)
+  val voteReqFailure = new VoteRequest(19L, 23, 29L, 31L)
+  val voteResp = new VoteResponse(17L, true)
   var rpc : RPC = _
   var mockProxy : Raft.Callback = _
   var mockExecutor : Executor = _
@@ -31,7 +31,7 @@ class RPCTest {
 
     class MockProxy extends Raft.Callback {
 
-      override def appendEntries(req: AppendEntriesReq, callback: Callback[AppendEntriesResp]): Unit =
+      override def appendEntries(req: AppendEntriesRequest, callback: Callback[AppendEntriesResponse]): Unit =
         if (appendEntriesReqSuccess.equals(req)) {
           inExecutor = true
           callback.handleResult(appenEntriesResp)
@@ -40,7 +40,7 @@ class RPCTest {
           callback.handleError(new RuntimeException)
         }
 
-      override def requestVote(req: VoteReq, callback: Callback[VoteResp]): Unit =
+      override def requestVote(req: VoteRequest, callback: Callback[VoteResponse]): Unit =
         if ( voteReqSuccess.equals(req) ) {
           inExecutor = true
           callback.handleResult(voteResp)
@@ -48,14 +48,21 @@ class RPCTest {
         } else {
           callback.handleError(new RuntimeException)
         }
-      override def add(value: ByteBuffer, callback: Callback[AddOrRemoveResp]): Unit = ???
-      override def next(callback: Callback[NextResp]): Unit = ???
-      override def remove(callback: Callback[AddOrRemoveResp]): Unit = ???
-      override def appendEntries(req: AppendEntriesReq): AppendEntriesResp = ???
-      override def requestVote(req: VoteReq): VoteResp = ???
-      override def add(value: ByteBuffer): AddOrRemoveResp = ???
-      override def next(): NextResp = ???
-      override def remove(): AddOrRemoveResp = ???
+      override def changeState(req: ByteBuffer, callback: Callback[ByteBuffer]): Unit = {
+        //        if ( new String(stateChangeReqSuccess.array()).equals(new String(req.array())) ) {
+        //          inExecutor = true
+        //          callback.handleResult(stateChangeResp)
+        //          inExecutor = false
+        //        } else {
+        //          callback.handleError(new RuntimeException)
+        //        }
+      }
+
+      override def appendEntries(req: AppendEntriesRequest): AppendEntriesResponse = ???
+      override def requestVote(req: VoteRequest): VoteResponse = ???
+      override def changeState(req: ByteBuffer): ByteBuffer = ???
+
+
     }
 
     inExecutor = false
@@ -69,7 +76,7 @@ class RPCTest {
   }
 
   @Test def testAppendEntries(): Unit = {
-    val hollaback : Hollaback[AppendEntriesResp]= new Hollaback("Should not happen", resp => {
+    val hollaback : Hollaback[AppendEntriesResponse]= new Hollaback("Should not happen", resp => {
       assertEquals(appenEntriesResp, resp)
       assertTrue(inExecutor)
     })
@@ -78,13 +85,13 @@ class RPCTest {
       hollaback)
     Thread.sleep(1000)
     verify(mockProxy).appendEntries(ArgumentMatchers.eq(appendEntriesReqSuccess), any())
-    verify(mockExecutor).submit[AppendEntriesResp](any())
+    verify(mockExecutor).submit[AppendEntriesResponse](any())
     verifyNoMoreInteractions(mockExecutor)
     verifyNoMoreInteractions(mockProxy)
   }
 
   @Test def testAppendEntriesThrows(): Unit = {
-    val hollaback : Hollaback[AppendEntriesResp]= new Hollaback("Should  happen", resp => {
+    val hollaback : Hollaback[AppendEntriesResponse]= new Hollaback("Should  happen", resp => {
       fail("Should not call success handler on failure")
     })
     rpc.appendEntries(
@@ -97,7 +104,7 @@ class RPCTest {
   }
 
   @Test def testRequestVote(): Unit = {
-    val hollaback : Hollaback[VoteResp]= new Hollaback("Should not happen", resp => {
+    val hollaback : Hollaback[VoteResponse]= new Hollaback("Should not happen", resp => {
       assertEquals(voteResp, resp)
       assertTrue(inExecutor)
     })
@@ -106,13 +113,13 @@ class RPCTest {
       hollaback)
     Thread.sleep(1000)
     verify(mockProxy).requestVote(ArgumentMatchers.eq(voteReqSuccess), any())
-    verify(mockExecutor).submit[AppendEntriesResp](any())
+    verify(mockExecutor).submit[AppendEntriesResponse](any())
     verifyNoMoreInteractions(mockExecutor)
     verifyNoMoreInteractions(mockProxy)
   }
 
   @Test def testRequestVoteThrows(): Unit = {
-    val hollaback : Hollaback[VoteResp]= new Hollaback("Should  happen", resp => {
+    val hollaback : Hollaback[VoteResponse]= new Hollaback("Should  happen", resp => {
       fail("Should not call success handler on failure")
     })
     rpc.requestVote(

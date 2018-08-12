@@ -5,13 +5,13 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.github.andrasbeni</groupId>
-    <artifactId>rq</artifactId>
+    <artifactId>SR-82</artifactId>
     <version>1.0-SNAPSHOT</version>
 
     <properties>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
-        <avro.version>1.8.1</avro.version>
+        <avro.version>1.8.2</avro.version>
         <encoding>UTF-8</encoding>
         <scala.version>2.12.4</scala.version>
     </properties>

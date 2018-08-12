@@ -1,11 +1,12 @@
-package com.github.andrasbeni.rq
+package com.github.andrasbeni.sr82
 
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent._
 
-import com.github.andrasbeni.rq.proto._
+import com.github.andrasbeni.sr82.map.MapStateMachine
+import com.github.andrasbeni.sr82.raft._
 import org.apache.avro.ipc.NettyServer
 import org.apache.avro.ipc.specific.SpecificResponder
 import org.slf4j.{Logger, LoggerFactory, MDC}
@@ -37,20 +38,25 @@ class Executor extends AutoCloseable {
 }
 
 class Listener(executor : Executor, cluster : Cluster) extends AutoCloseable {
+  private val logger = LoggerFactory.getLogger(classOf[Listener])
   var role : Role = _
   var server = new NettyServer(new SpecificResponder(classOf[Raft], new Raft {
-    override def appendEntries(req: AppendEntriesReq) : AppendEntriesResp = executor.submit(() => role.appendEntries(req)).get
-    override def requestVote(req: VoteReq) : VoteResp = executor.submit(() => role.requestVote(req)).get
+    override def appendEntries(req: AppendEntriesRequest) : AppendEntriesResponse = executor.submit(() => role.appendEntries(req)).get
+    override def requestVote(req: VoteRequest) : VoteResponse = executor.submit(() => role.requestVote(req)).get
 
-    override def add(value: ByteBuffer) : AddOrRemoveResp = executor.submit(()=> role.add(value)).get.get
-    override def remove() : AddOrRemoveResp = executor.submit(()=> role.remove()).get.get
-    override def next() : NextResp = executor.submit(() => role.next()).get
+    override def changeState(req: ByteBuffer) : ByteBuffer = try {
+      val result = executor.submit(() => role.changeState(req)).get.get
+      result
+    } catch {
+      case e : Exception if e.isInstanceOf[ExecutionException] => throw e.getCause
+      case e : Exception => throw e
+    }
 
   }), new InetSocketAddress(cluster.localHostPort._1, cluster.localHostPort._2))
-  LoggerFactory.getLogger(classOf[Listener]).info(s"Listener starting on ${cluster.localHostPort}")
+  logger.info(s"Listener starting on ${cluster.localHostPort}")
 
   override def close() : Unit = {
-    LoggerFactory.getLogger(classOf[Listener]).info(s"Listener closing on ${cluster.localHostPort}")
+    logger.info(s"Listener closing on ${cluster.localHostPort}")
     server.close()
   }
 }
@@ -61,7 +67,7 @@ class Server(val config : Properties) {
   val executor = new Executor()
   val cluster = new Cluster(config, executor)
   val persistence = new Persistence(config)()
-  val stateMachine = new StateMachine(persistence)
+  val stateMachine : StateMachine[_, _] = createStateMachine
   val listener = new Listener(executor, cluster)
 
   def close(): Unit = {
@@ -73,11 +79,20 @@ class Server(val config : Properties) {
     }).get()
   }
 
+  def createStateMachine : StateMachine[_, _] = {
+    val className = config.getProperty("state.machine.factory")
+    val factoryClass = Class.forName(className)
+    val factory = factoryClass.newInstance().asInstanceOf[StateMachineFactory]
+    val stateMachine = factory.create(persistence)
+    stateMachine
+
+  }
+
   def start() : Unit = {
 
     executor.submit(()=> {
       MDC.put("server", cluster.localId.toString)
-      new Follower(config, stateMachine, persistence, cluster, executor, role => listener.role = role).startRole()
+      new Follower(config, stateMachine, persistence, cluster, executor, listener.role = _).startRole()
     })
   }
 

@@ -1,8 +1,8 @@
-package com.github.andrasbeni.rq
+package com.github.andrasbeni.sr82
 
 import java.util.Properties
 
-import com.github.andrasbeni.rq.proto._
+import com.github.andrasbeni.sr82.raft._
 
 import scala.collection.JavaConverters._
 import org.apache.avro.ipc.{Callback, NettyTransceiver}
@@ -19,10 +19,10 @@ class Hollaback[T](val warningOnError : String, val successHandler : T => Unit)
 
 class RPC(proxy : Raft.Callback, executor : Executor, backgroundThreads : ExecutorService) {
   val logger : Logger = LoggerFactory.getLogger(classOf[RPC])
-  def appendEntries(req: AppendEntriesReq, callback: Hollaback[AppendEntriesResp]) : Unit = {
+  def appendEntries(req: AppendEntriesRequest, callback: Hollaback[AppendEntriesResponse]) : Unit = {
     backgroundThreads.submit(() => {
-      proxy.appendEntries(req, new Callback[AppendEntriesResp] {
-        override def handleResult(result: AppendEntriesResp): Unit = {
+      proxy.appendEntries(req, new Callback[AppendEntriesResponse] {
+        override def handleResult(result: AppendEntriesResponse): Unit = {
           executor.submit(() => callback.successHandler(result))
         }
 
@@ -33,10 +33,10 @@ class RPC(proxy : Raft.Callback, executor : Executor, backgroundThreads : Execut
     }, null)
   }
 
-  def requestVote(req: VoteReq, callback: Hollaback[VoteResp]) : Unit = {
+  def requestVote(req: VoteRequest, callback: Hollaback[VoteResponse]) : Unit = {
     backgroundThreads.submit(() => {
-      proxy.requestVote(req, new Callback[VoteResp] {
-        override def handleResult(result: VoteResp): Unit = {
+      proxy.requestVote(req, new Callback[VoteResponse] {
+        override def handleResult(result: VoteResponse): Unit = {
           executor.submit(() => callback.successHandler(result))
         }
 

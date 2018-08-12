@@ -1,10 +1,9 @@
-package com.github.andrasbeni.rq
+package com.github.andrasbeni.sr82
 
 import java.io.File
 import java.nio.file.Files.createTempFile
 import java.nio.file.attribute.PosixFilePermissions.{asFileAttribute, fromString}
 
-import com.github.andrasbeni.rq.proto.{AddOrRemove, LogEntry}
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{Before, Test}
 

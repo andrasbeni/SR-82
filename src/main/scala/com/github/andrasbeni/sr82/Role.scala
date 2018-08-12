@@ -1,21 +1,21 @@
-package com.github.andrasbeni.rq
+package com.github.andrasbeni.sr82
 
 import java.nio.ByteBuffer
 import java.util.Properties
-import java.util.concurrent.CompletableFuture.completedFuture
-import java.util.concurrent.{Future, ScheduledFuture}
+import java.util.concurrent.{CompletableFuture, Future, ScheduledFuture}
 
-import com.github.andrasbeni.rq.proto._
+import com.github.andrasbeni.sr82.raft._
+import com.sun.corba.se.spi.orbutil.fsm.Guard.Complement
 import org.slf4j.{Logger, LoggerFactory, MDC}
 
 trait RoleFactory {
-  def apply(config : Properties, stateMachine : StateMachine, persistence : Persistence, cluster : Cluster, executor : Executor, roleListener : Role => Unit) : Role
+  def apply(config : Properties, stateMachine : StateMachine[_, _], persistence : Persistence, cluster : Cluster, executor : Executor, roleListener : Role => Unit) : Role
 }
 
 /**
   * Created by andrasbeni on 11/10/17.
   */
-abstract class Role(val config : Properties, val stateMachine : StateMachine, val persistence : Persistence, val cluster : Cluster, val executor : Executor, val roleListener : Role => Unit) {
+abstract class Role(val config : Properties, val stateMachine : StateMachine[_, _], val persistence : Persistence, val cluster : Cluster, val executor : Executor, val roleListener : Role => Unit) {
 
   val logger : Logger = LoggerFactory.getLogger(getClass)
 
@@ -36,7 +36,7 @@ abstract class Role(val config : Properties, val stateMachine : StateMachine, va
   def afterRequestVote() : Unit = {}
 
 
-  def requestVote(req: VoteReq): VoteResp = {
+  def requestVote(req: VoteRequest): VoteResponse = {
     logger.debug(s"Received vote request from ${req.getCandidateId} : $req")
     beforeRequestVote()
     val oldVoteAndTerm = persistence.voteAndTerm
@@ -48,13 +48,13 @@ abstract class Role(val config : Properties, val stateMachine : StateMachine, va
         becomeFollower(req.getCandidateId)
     }
     afterRequestVote()
-    logger.debug(s"Responding to vote request from ${req.getCandidateId}: ${new VoteResp(oldTerm, granted)}")
-    new VoteResp(oldTerm, granted)
+    logger.debug(s"Responding to vote request from ${req.getCandidateId}: ${new VoteResponse(oldTerm, granted)}")
+    new VoteResponse(oldTerm, granted)
   }
 
-  def appendEntries(req: AppendEntriesReq) : AppendEntriesResp
+  def appendEntries(req: AppendEntriesRequest) : AppendEntriesResponse
 
-  private def candidateLogMoreUpToDate(req: VoteReq): Boolean = {
+  private def candidateLogMoreUpToDate(req: VoteRequest): Boolean = {
     val lastEntry = persistence.log.lastEntry
     (req.getLastLogTerm > lastEntry.getTerm) ||
       (req.getLastLogTerm == lastEntry.getTerm &&
@@ -66,15 +66,18 @@ abstract class Role(val config : Properties, val stateMachine : StateMachine, va
     convertTo(Follower)
   }
 
-  def remove() : Future[AddOrRemoveResp] =
-    completedFuture[AddOrRemoveResp](new AddOrRemoveResp(cluster.currentLeader, false))
+  def changeState(x: ByteBuffer) : Future[ByteBuffer] = {
+    val future = new CompletableFuture[ByteBuffer]
+    completeWithNotLeader(future)
+  }
 
-  def next() : NextResp =
-    new NextResp(cluster.currentLeader, false, ZeroBytes())
 
-  def add(value: ByteBuffer) : Future[AddOrRemoveResp]  =
-    completedFuture[AddOrRemoveResp](new AddOrRemoveResp(cluster.currentLeader, false))
-
+  protected def completeWithNotLeader(future: CompletableFuture[ByteBuffer]): CompletableFuture[ByteBuffer] = {
+    val notLeader = new NotLeader()
+    notLeader.setLeaderAddress(cluster.currentLeader)
+    future.completeExceptionally(notLeader)
+    future
+  }
 
   private var timer : Option[ScheduledFuture[_]]= None
 

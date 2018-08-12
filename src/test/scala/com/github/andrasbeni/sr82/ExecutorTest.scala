@@ -1,4 +1,4 @@
-package com.github.andrasbeni.rq
+package com.github.andrasbeni.sr82
 
 import java.util.concurrent.{Future, TimeUnit}
 

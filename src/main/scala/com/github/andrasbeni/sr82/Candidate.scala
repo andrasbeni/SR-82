@@ -1,16 +1,16 @@
-package com.github.andrasbeni.rq
+package com.github.andrasbeni.sr82
 
 import java.util.Properties
 
-import com.github.andrasbeni.rq.proto.{AppendEntriesReq, AppendEntriesResp, VoteReq, VoteResp}
+import com.github.andrasbeni.sr82.raft._
 
 object Candidate extends RoleFactory {
-  override def apply(config : Properties, stateMachine: StateMachine, persistence: Persistence, cluster: Cluster, executor: Executor, roleListener : Role => Unit): Role = {
+  override def apply(config : Properties, stateMachine: StateMachine[_, _], persistence: Persistence, cluster: Cluster, executor: Executor, roleListener : Role => Unit): Role = {
     new Candidate(config, stateMachine, persistence, cluster, executor, roleListener)
   }
 }
 
-class Candidate(config : Properties, stateMachine : StateMachine, persistence : Persistence, cluster : Cluster, executor : Executor, roleListener : Role => Unit)
+class Candidate(config : Properties, stateMachine : StateMachine[_, _], persistence : Persistence, cluster : Cluster, executor : Executor, roleListener : Role => Unit)
   extends Role(config, stateMachine, persistence, cluster, executor, roleListener) {
 
   private var yes : Int = 1
@@ -19,10 +19,10 @@ class Candidate(config : Properties, stateMachine : StateMachine, persistence : 
     super.startRole()
     persistence.setVoteAndTerm(cluster.localId, persistence.voteAndTerm.term + 1)
     val lastEntry = persistence.log.lastEntry
-    val req = new VoteReq(persistence.term, cluster.localId, lastEntry.getIndex, lastEntry.getTerm)
+    val req = new VoteRequest(persistence.term, cluster.localId, lastEntry.getIndex, lastEntry.getTerm)
     for (node <- cluster.serverIds) {
       logger.debug(s"Sending vote request to $node: $req")
-      cluster.clientTo(node).requestVote(req, new Hollaback[VoteResp](s"Could not send vote request to $node.", result => {
+      cluster.clientTo(node).requestVote(req, new Hollaback[VoteResponse](s"Could not send vote request to $node.", result => {
 
             logger.debug(s"Received vote result from $node: $result")
             if (!alive) {
@@ -43,14 +43,14 @@ class Candidate(config : Properties, stateMachine : StateMachine, persistence : 
     startTimer()
   }
 
-  override def appendEntries(req: AppendEntriesReq): AppendEntriesResp = {
+  override def appendEntries(req: AppendEntriesRequest): AppendEntriesResponse = {
     val valid = req.getTerm >= persistence.term
     if (valid) {
       persistence.setVoteAndTerm(-1, req.getTerm)
       val nextRole = becomeFollower(req.getLeaderId)
       nextRole.appendEntries(req)
     } else {
-      new AppendEntriesResp(persistence.term, false)
+      new AppendEntriesResponse(persistence.term, false)
     }
   }
 

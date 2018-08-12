@@ -1,4 +1,4 @@
-package com.github.andrasbeni.rq
+package com.github.andrasbeni.sr82
 
 import java.util.Properties
 import java.util.concurrent.{CompletableFuture, Future, ScheduledFuture}
@@ -18,7 +18,7 @@ class FollowerTest {
 
   var follower : Follower = _
   var persistence : Persistence =_
-  var stateMachine : StateMachine = _
+  var stateMachine : StateMachine[_, _] = _
   var cluster : Cluster = _
   var executor : Executor = _
   var timer : Future[_] = _
@@ -30,7 +30,7 @@ class FollowerTest {
     config.setProperty("election.timeout.min", minTimeout.toString)
     config.setProperty("election.timeout.max", maxTimeout.toString)
     persistence = mock(classOf[Persistence])
-    stateMachine = new StateMachine(persistence)
+    stateMachine = new MockStateMachine(persistence)
     cluster = mock(classOf[Cluster])
     executor = mock(classOf[Executor])
     doAnswer((invocationOnMock: InvocationOnMock) => {

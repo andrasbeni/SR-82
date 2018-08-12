@@ -1,17 +1,18 @@
-package com.github.andrasbeni.rq
+package com.github.andrasbeni.sr82
 import java.net.{InetSocketAddress, ServerSocket}
 import java.nio.ByteBuffer
 import java.util.Properties
-import java.util.concurrent.{CompletableFuture, CountDownLatch, Future}
+import java.util.concurrent.{CompletableFuture, CountDownLatch}
 
-import com.github.andrasbeni.rq.proto._
+import com.github.andrasbeni.sr82.raft._
 import org.apache.avro.ipc.{Callback, NettyTransceiver}
 import org.apache.avro.ipc.specific.SpecificRequestor
 import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.{Before, Ignore, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doAnswer, mock, when}
 import org.mockito.invocation.InvocationOnMock
+import org.slf4j.{Logger, LoggerFactory}
 
 
 class ListenerTest {
@@ -51,13 +52,13 @@ class ListenerTest {
   }
 
   @Test def testRequestVote(): Unit = {
-    val voteResp : VoteResp = new VoteResp(17L, true)
-    val voteReq : VoteReq = new VoteReq(3L, 2, 5L, 7L)
-    var response : VoteResp = null
+    val voteResp : VoteResponse = new VoteResponse(17L, true)
+    val voteReq : VoteRequest = new VoteRequest(3L, 2, 5L, 7L)
+    var response : VoteResponse = null
     val latch = new CountDownLatch(1)
     when(role.requestVote(voteReq)).thenReturn(voteResp)
-    proxy.requestVote(voteReq, new Callback[VoteResp]() {
-      override def handleResult(result: VoteResp): Unit = {
+    proxy.requestVote(voteReq, new Callback[VoteResponse]() {
+      override def handleResult(result: VoteResponse): Unit = {
         response = result
         latch.countDown()
       }
@@ -68,39 +69,47 @@ class ListenerTest {
     assertEquals(voteResp, response)
   }
 
-  @Test def testAdd(): Unit = {
-    val addReq = ByteBuffer.wrap("Hello".getBytes)
-    val addResp = new AddOrRemoveResp(new LeaderAddress("someServer", 11111), false)
-    var response : AddOrRemoveResp = null
+  @Test def testChangeState(): Unit = {
+    val req = ByteBuffer.wrap("Hello".getBytes)
+    val addResp = ByteBuffer.wrap("Hi".getBytes)
+    var response : ByteBuffer = null
     val latch = new CountDownLatch(1)
-    when(role.add(addReq)).thenReturn(CompletableFuture.completedFuture(addResp))
-    proxy.add(addReq, new Callback[AddOrRemoveResp]() {
-      override def handleResult(result: AddOrRemoveResp): Unit = {
+    when(role.changeState(req)).thenAnswer(_ => {
+      CompletableFuture.completedFuture(addResp)
+    })
+    proxy.changeState(req, new Callback[ByteBuffer]() {
+      override def handleResult(result: ByteBuffer): Unit = {
         response = result
         latch.countDown()
       }
 
-      override def handleError(error: Throwable): Unit = ???
+      override def handleError(error: Throwable): Unit = {
+        LoggerFactory.getLogger(classOf[ListenerTest]).info("Error", error)
+        latch.countDown()
+      }
     })
     latch.await()
-    assertEquals(addResp, response)
+    assertEquals("Hi", new String(response.array()))
   }
 
-  @Test def testRemove(): Unit = {
-    val removeResp = new AddOrRemoveResp(new LeaderAddress("someServer", 11111), false)
-    var response : AddOrRemoveResp = null
+  @Test def testChangeStateThrows(): Unit = {
+    val req = ByteBuffer.wrap("Hello".getBytes)
     val latch = new CountDownLatch(1)
-    when(role.remove()).thenReturn(CompletableFuture.completedFuture(removeResp))
-    proxy.remove(new Callback[AddOrRemoveResp]() {
-      override def handleResult(result: AddOrRemoveResp): Unit = {
-        response = result
+    var actualError : Throwable = null
+    val error = NotLeader.newBuilder().setLeaderAddress(new LeaderAddress("someServer", 11111)).build()
+    val result = new CompletableFuture[ByteBuffer]()
+    result.completeExceptionally(error)
+    when(role.changeState(req)).thenReturn(result)
+    proxy.changeState(req, new Callback[ByteBuffer]() {
+      override def handleResult(result: ByteBuffer): Unit = ???
+
+      override def handleError(error: Throwable): Unit = {
+        actualError = error
         latch.countDown()
       }
-
-      override def handleError(error: Throwable): Unit = ???
     })
     latch.await()
-    assertEquals(removeResp, response)
+    assertEquals(error, actualError)
   }
 
 }

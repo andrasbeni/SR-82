@@ -1,11 +1,11 @@
-package com.github.andrasbeni.rq
+package com.github.andrasbeni.sr82
 
 import java.net.{InetSocketAddress, ServerSocket}
 import java.nio.ByteBuffer
 import java.util.Properties
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.{CompletableFuture, CountDownLatch, TimeUnit}
 
-import com.github.andrasbeni.rq.proto._
+import com.github.andrasbeni.sr82.raft._
 import org.apache.avro.ipc.NettyServer
 import org.apache.avro.ipc.specific.SpecificResponder
 import org.junit.{Before, Test}
@@ -70,30 +70,30 @@ class ClusterTest {
     assertEquals(new LeaderAddress("localhost", port1), cluster.currentLeader)
   }
 
-  @Test(timeout = 2000) def testClientTo() : Unit = {
-    val voteResp : VoteResp = new VoteResp(17L, true)
-    val voteReq : VoteReq = new VoteReq(3L, 2, 5L, 7L)
+  @Test def testClientTo() : Unit = {
+    val voteResp : VoteResponse = new VoteResponse(17L, true)
+    val voteReq : VoteRequest = new VoteRequest(3L, 2, 5L, 7L)
     var correctRequestSent = false
+    val conversationFinished = new CountDownLatch(1)
 
     var server = new NettyServer(new SpecificResponder(classOf[Raft], new Raft {
-      override def appendEntries(req: AppendEntriesReq) : AppendEntriesResp = ???
-      override def requestVote(req: VoteReq) : VoteResp = {
+      override def appendEntries(req: AppendEntriesRequest) : AppendEntriesResponse = ???
+      override def requestVote(req: VoteRequest) : VoteResponse = {
         correctRequestSent = req.equals(voteReq)
         voteResp
       }
-
-      override def add(value: ByteBuffer) : AddOrRemoveResp = ???
-      override def remove() : AddOrRemoveResp = ???
-      override def next() : NextResp = ???
+      override def changeState(req: ByteBuffer): ByteBuffer = ???
 
     }), new InetSocketAddress("localhost", port3))
     server.start()
     Thread.sleep(1000)
 
     val rpc : RPC = Mockito.spy(cluster.clientTo(3))
-    rpc.requestVote(voteReq, new Hollaback[VoteResp]("Should not fail", resp => {
+    rpc.requestVote(voteReq, new Hollaback[VoteResponse]("Should not fail", resp => {
       assertEquals(voteResp, resp)
+      conversationFinished.countDown()
     }))
+    conversationFinished.await(2000, TimeUnit.MILLISECONDS)
     assertTrue(correctRequestSent)
 
     server.close()

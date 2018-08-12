@@ -1,0 +1,41 @@
+{"namespace": "com.github.andrasbeni.sr82.distributedmap",
+  "protocol" : "DistributedMap",
+
+  "types": [
+    {"type": "record", "name": "MapEntry", "fields": [
+      {"name": "key",   "type": "string"},
+      {"name": "value",   "type": "bytes"}
+    ]},
+
+    {"type": "record", "name": "EntryAndOldValue", "fields": [
+      {"name": "newEntry",   "type": "MapEntry"},
+      {"name": "oldValue",   "type": "bytes"}
+    ]},
+
+    {"type": "record", "name": "PutCommand", "fields": [
+      {"name": "entry",   "type": "MapEntry"}
+    ]},
+
+    {"type": "record", "name": "GetCommand", "fields": [
+      {"name": "key",   "type": "string"}
+    ]},
+
+    {"type": "record", "name": "CheckAndPutCommand", "fields": [
+      {"name": "entryAndOldValue",   "type": "EntryAndOldValue"}
+    ]},
+
+    {"type": "record", "name": "KeysCommand", "fields": [
+      {"name": "prefix",   "type": "string"}
+    ]},
+
+    {"type": "record", "name": "MapCommand", "fields": [
+      {"name": "value",   "type": ["PutCommand", "GetCommand", "KeysCommand", "CheckAndPutCommand"]}
+    ]},
+
+    {"type": "record", "name": "MapResult", "fields": [
+      {"name": "value",   "type": ["null", "MapEntry", {"type" : "array", "items" : "string"}, "bytes"]}
+    ]}
+
+
+  ]
+}

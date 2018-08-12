@@ -1,11 +1,11 @@
-package com.github.andrasbeni.rq
+package com.github.andrasbeni.sr82
 
 import java.io.{ByteArrayOutputStream, DataOutputStream, RandomAccessFile}
 import java.nio.ByteBuffer
 import java.util
 import java.util.Properties
 
-import com.github.andrasbeni.rq.proto.{AddOrRemove, LogEntry, Operation}
+import com.github.andrasbeni.sr82.raft._
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.JavaConverters._
@@ -15,7 +15,7 @@ class Persistence(
       val config : Properties)(
       val log : Log = new Log(
         config.getProperty("log.file"),
-        new LogEntry(0L, 0L, new AddOrRemove(Operation.Add, ZeroBytes()))),
+        new LogEntry(0L, 0L, ZeroBytes())),
       val state : State = new State(
         config.getProperty("state.file"),
         VoteAndTerm(-1, 0))) extends AutoCloseable {
@@ -82,7 +82,7 @@ class Log(fileName : String, defaultLastEntry : LogEntry) extends AutoCloseable 
 
   }
   var lastEntry : LogEntry = read(indexMap.lastKey()).get
-  def append(term: Long, data: AddOrRemove) : Long = {
+  def append(term: Long, data: ByteBuffer) : Long = {
     append(new LogEntry(indexMap.lastKey() + 1, term, data))
   }
   def append(entry : LogEntry): Long = {
@@ -148,13 +148,15 @@ object VoteAndTerm {
 object LogEntryHelper {
 
   def write(entry : LogEntry, file : RandomAccessFile) : Unit = {
+    val buffer = entry.getData
     val bos = new ByteArrayOutputStream()
     val os = new DataOutputStream(bos)
     os.writeLong(entry.getTerm)
     os.writeLong(entry.getIndex)
-    os.writeInt(if(entry.getData.getOp == Operation.Remove) -1 else entry.getData.getValue.remaining())
-    val bytes = new Array[Byte](entry.getData.getValue.remaining())
-    entry.getData.getValue.get(bytes)
+    os.writeInt(buffer.remaining())
+    val bytes = new Array[Byte](entry.getData.remaining())
+    buffer.get(bytes)  // TODO write directly
+    buffer.rewind()
     os.write(bytes)
 
     file.write(bos.toByteArray)
@@ -164,10 +166,11 @@ object LogEntryHelper {
     val term = file.readLong()
     val index = file.readLong()
     val length = file.readInt()
-    val bytes = if (length == -1) ZeroBytes() else { val array = new Array[Byte](length)
+    val bytes = if (length == -1) ZeroBytes() else {
+      val array = new Array[Byte](length)
       file.readFully(array)
       ByteBuffer.wrap(array)}
-    new LogEntry(index, term, new AddOrRemove(if (length == -1) Operation.Remove else Operation.Add, bytes))
+    new LogEntry(index, term, bytes)
 
   }
 }

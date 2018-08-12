@@ -1,4 +1,4 @@
-package com.github.andrasbeni.rq
+package com.github.andrasbeni.sr82
 
 import java.nio.file.{Files, Path}
 import Files.createTempFile
@@ -6,7 +6,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.file.attribute.PosixFilePermissions._
 
-import com.github.andrasbeni.rq.proto.{AddOrRemove, LogEntry, Operation}
+import com.github.andrasbeni.sr82.raft.LogEntry
 import org.junit.Test
 import org.junit.Before
 import org.junit.Assert._
@@ -18,7 +18,7 @@ class LogTest {
 
   var log : Log = _
   var file : String = _
-  val defaultEntry = new LogEntry(2017L, 1218L, new AddOrRemove(null, null))
+  val defaultEntry = new LogEntry(2017L, 1218L, ZeroBytes())
 
   @Before def before() {
     val tempFile = createTempFile("test", "log", asFileAttribute(fromString("rw-r-----"))).toFile
@@ -44,7 +44,7 @@ class LogTest {
   }
 
   @Test def testSimpleAppend {
-    val entry = new LogEntry(1L, 1L, new AddOrRemove(Operation.Add, ByteBuffer.wrap("Hello".getBytes)))
+    val entry = new LogEntry(1L, 1L, ByteBuffer.wrap("Hello".getBytes))
     log.append(1, entry.getData)
     resetValueBuffer(entry)
     assertTrue(log.containsIndex(1))
@@ -53,7 +53,7 @@ class LogTest {
   }
 
   @Test def testAppend {
-    val entry = new LogEntry(1L, 1L, new AddOrRemove(Operation.Add, ByteBuffer.wrap("Hello".getBytes)))
+    val entry = new LogEntry(1L, 1L, ByteBuffer.wrap("Hello".getBytes))
     log.append(entry)
     resetValueBuffer(entry)
     assertTrue(log.containsIndex(1))
@@ -63,10 +63,10 @@ class LogTest {
   }
 
   @Test def testCloseAndOpen {
-    var entry = new LogEntry(1L, 1L, new AddOrRemove(Operation.Add, ByteBuffer.wrap("Hello".getBytes)))
+    var entry = new LogEntry(1L, 1L, ByteBuffer.wrap("Hello".getBytes))
     log.append(entry)
     resetValueBuffer(entry)
-    entry = new LogEntry(2L, 1L, new AddOrRemove(Operation.Add, ByteBuffer.wrap("Raft".getBytes)))
+    entry = new LogEntry(2L, 1L, ByteBuffer.wrap("Raft".getBytes))
     log.append(entry)
     resetValueBuffer(entry)
     log.close()
@@ -77,13 +77,13 @@ class LogTest {
   }
   
   @Test def testRollback() {
-    val entry1 = new LogEntry(1L, 1L, new AddOrRemove(Operation.Add, ByteBuffer.wrap("Hello".getBytes)))
+    val entry1 = new LogEntry(1L, 1L, ByteBuffer.wrap("Hello".getBytes))
     log.append(entry1)
     resetValueBuffer(entry1)
-    val entry2 = new LogEntry(2L, 1L, new AddOrRemove(Operation.Add, ByteBuffer.wrap("Raft".getBytes)))
+    val entry2 = new LogEntry(2L, 1L, ByteBuffer.wrap("Raft".getBytes))
     log.append(entry2)
     resetValueBuffer(entry2)
-    val entry3 = new LogEntry(3L, 2L, new AddOrRemove(Operation.Remove, ByteBuffer.wrap(Array.emptyByteArray)))
+    val entry3 = new LogEntry(3L, 2L, ByteBuffer.wrap(Array.emptyByteArray))
     log.append(entry3)
     resetValueBuffer(entry3)
     log.rollback(3)
@@ -97,7 +97,7 @@ class LogTest {
   }
 
   private def resetValueBuffer(entry : LogEntry) {
-    entry.getData.getValue.flip()
+    entry.getData.rewind()
   }
 
 }
