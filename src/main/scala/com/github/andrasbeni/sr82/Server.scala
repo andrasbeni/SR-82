@@ -5,7 +5,6 @@ import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent._
 
-import com.github.andrasbeni.sr82.map.MapStateMachine
 import com.github.andrasbeni.sr82.raft._
 import org.apache.avro.ipc.NettyServer
 import org.apache.avro.ipc.specific.SpecificResponder
@@ -17,26 +16,6 @@ object ZeroBytes {
   def apply() : ByteBuffer = emptyBuffer
 }
 
-class Executor extends AutoCloseable {
-  val logger : Logger = LoggerFactory.getLogger( classOf[Executor] )
-
-  private val executor : ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
-  def submit[T](callable : () => T): Future[T] =
-    executor.submit(() =>
-      try{callable.apply()}
-      catch {
-        case e : Exception => logger.error("Error", e); throw e
-      })
-  def schedule[T](callable : () => T, milliseconds : Long): ScheduledFuture[T] =
-    executor.schedule(() =>
-      try{callable.apply()}
-      catch{
-        case e : Exception => logger.error("Error", e); throw e
-      }, milliseconds, TimeUnit.MILLISECONDS)
-  override def close(): Unit = executor.shutdownNow()
-
-}
-
 class Listener(executor : Executor, cluster : Cluster) extends AutoCloseable {
   private val logger = LoggerFactory.getLogger(classOf[Listener])
   var role : Role = _
@@ -45,7 +24,9 @@ class Listener(executor : Executor, cluster : Cluster) extends AutoCloseable {
     override def requestVote(req: VoteRequest) : VoteResponse = executor.submit(() => role.requestVote(req)).get
 
     override def changeState(req: ByteBuffer) : ByteBuffer = try {
-      val result = executor.submit(() => role.changeState(req)).get.get
+      val submitted: Future[Future[ByteBuffer]] =  executor.submit(() => role.changeState(req))
+      val resultOfSubmit = submitted.get()
+      val result = resultOfSubmit.get()
       result
     } catch {
       case e : Exception if e.isInstanceOf[ExecutionException] => throw e.getCause
@@ -64,7 +45,7 @@ class Listener(executor : Executor, cluster : Cluster) extends AutoCloseable {
 
 class Server(val config : Properties) {
   val logger : Logger = LoggerFactory.getLogger( classOf[Server] )
-  val executor = new Executor()
+  val executor = new DefaultExecutor()
   val cluster = new Cluster(config, executor)
   val persistence = new Persistence(config)()
   val stateMachine : StateMachine[_, _] = createStateMachine

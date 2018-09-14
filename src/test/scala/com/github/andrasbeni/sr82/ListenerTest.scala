@@ -2,7 +2,7 @@ package com.github.andrasbeni.sr82
 import java.net.{InetSocketAddress, ServerSocket}
 import java.nio.ByteBuffer
 import java.util.Properties
-import java.util.concurrent.{CompletableFuture, CountDownLatch}
+import java.util.concurrent.{Callable, CompletableFuture, CountDownLatch}
 
 import com.github.andrasbeni.sr82.raft._
 import org.apache.avro.ipc.{Callback, NettyTransceiver}
@@ -38,7 +38,7 @@ class ListenerTest {
     role = mock(classOf[Role])
     mockExecutor = mock(classOf[Executor])
     doAnswer((invocationOnMock: InvocationOnMock) => {
-      val value = invocationOnMock.getArgument(0).asInstanceOf[() => _].apply()
+      val value = invocationOnMock.getArgument(0).asInstanceOf[Callable[_]].call()
       CompletableFuture.completedFuture(value)
     }).when(mockExecutor).submit(any())
     val config = new Properties()

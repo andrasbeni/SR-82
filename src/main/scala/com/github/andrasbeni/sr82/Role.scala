@@ -79,7 +79,7 @@ abstract class Role(val config : Properties, val stateMachine : StateMachine[_, 
     future
   }
 
-  private var timer : Option[ScheduledFuture[_]]= None
+  private var timer : Option[Future[_]]= None
 
   private val minElectionTimeout = config.getProperty("election.timeout.min").toLong
 

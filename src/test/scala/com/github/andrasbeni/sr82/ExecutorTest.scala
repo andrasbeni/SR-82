@@ -14,7 +14,7 @@ class ExecutorTest {
   var executor : Executor = _
 
   @Before def setup(): Unit = {
-    executor = new Executor()
+    executor = new DefaultExecutor()
   }
 
   @After def tearDown() : Unit = {
@@ -27,7 +27,7 @@ class ExecutorTest {
   }
 
   @Test(expected = classOf[ExecutionException]) def testSubmitThrows() : Unit = {
-    executor.submit(() => throw new RuntimeException).get()
+    executor.submit[Int](() => throw new RuntimeException).get()
   }
 
 
@@ -41,7 +41,7 @@ class ExecutorTest {
   }
 
   @Test(expected = classOf[ExecutionException]) def testScheduleThrows() : Unit = {
-    executor.schedule(() => throw new RuntimeException, 100).get()
+    executor.schedule[Nothing](() => throw new RuntimeException, 100).get()
   }
 
 
@@ -49,7 +49,7 @@ class ExecutorTest {
     val events = new java.util.LinkedList[(Int, String)]()
     val futures = new java.util.LinkedList[Future[Int]]()
     (0 until 10).foreach(i => {
-      val future = executor.submit(()=> {
+      val future : Future[Int]= executor.submit(()=> {
         events.add((i, "Start"))
         Thread.sleep(300)
         events.add((i, "End"))
