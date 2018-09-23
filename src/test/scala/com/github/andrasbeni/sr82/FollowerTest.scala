@@ -17,11 +17,10 @@ class FollowerTest {
   val maxTimeout = 6 * minTimeout / 5
 
   var follower : Follower = _
-  var persistence : Persistence =_
+  var persistence : Persistence = _
   var stateMachine : StateMachine[_, _] = _
   var cluster : Cluster = _
   var executor : FakeTimeExecutor = _
-  var timer : Future[_] = _
   var roleListener : Role => Unit = _
 
 
@@ -58,6 +57,11 @@ class FollowerTest {
     follower.appendEntries(new AppendEntriesRequest(1L, 1, 1L, 1L, Collections.emptyList(), 0L))
     executor.passTime(800)
     verifyNoMoreInteractions(roleListener)
+  }
+
+  @Test def becomeFollower() : Unit = {
+    follower.becomeFollower(7)
+    verify(cluster).leaderId = ArgumentMatchers.eq(7)
   }
 
 }
